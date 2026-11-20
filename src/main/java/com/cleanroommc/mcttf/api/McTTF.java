@@ -18,7 +18,6 @@ import com.cleanroommc.mcttf.profile.FontDescriptor;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -31,9 +30,6 @@ public final class McTTF {
     /** The three fonts this tool targets: id -> display family name. */
     public static final Map<String, String> STANDARD_FONTS = Map.of("default", "Minecraft Default", "alt",
             "Minecraft Enchantment", "illageralt", "Minecraft Illager");
-
-    /** Regular, Bold, Italic, Bold Italic - generated for every font by default. */
-    public static final FontStyle[] ALL_STYLES = FontStyle.values();
 
     private McTTF() { }
 
@@ -59,9 +55,26 @@ public final class McTTF {
      */
     public static byte[] convertToBytes(AssetSource assets, String fontName, String familyName, FontStyle style)
             throws IOException {
+        return convertToBytes(assets, fontName, familyName, style, Map.of());
+    }
+
+    /**
+     * Same as {@link #convertToBytes(AssetSource, String, String, FontStyle)}, with {@code fallback}
+     * glyphs (e.g. from {@link com.cleanroommc.mcttf.glyph.TtfGlyphLoader}) filling every codepoint
+     * the font's own providers don't define.
+     */
+    public static byte[] convertToBytes(AssetSource assets, String fontName, String familyName, FontStyle style,
+            Map<Integer, Glyph> fallback) throws IOException {
         FontDescriptor descriptor = FontDescriptor.load(assets, fontName);
         GlyphLoader loader = new GlyphLoader(assets);
         Map<Integer, Glyph> glyphs = loader.load(descriptor);
+        fallback.forEach(glyphs::putIfAbsent);
+
+        // The glyph count is a u16 and .notdef takes one slot
+        if (glyphs.size() > 0xFFFF - 1) {
+            throw new IOException("Font '" + fontName + "' has " + glyphs.size()
+                            + " glyphs with fallbacks merged, more than the 65,534 a TrueType font can hold");
+        }
 
         Map<Integer, SimpleGlyphOutline> outlines = new LinkedHashMap<>();
         for (Map.Entry<Integer, Glyph> e : glyphs.entrySet()) {
@@ -71,69 +84,6 @@ public final class McTTF {
         TtfWriter writer = new TtfWriter(familyName, style);
         writer.addGlyphs(outlines);
         return writer.toBytes();
-    }
-
-    /** Same as {@link #convertToBytes} but for {@link FontStyle#REGULAR}. */
-    public static byte[] convertToBytes(AssetSource assets, String fontName, String familyName) throws IOException {
-        return convertToBytes(assets, fontName, familyName, FontStyle.REGULAR);
-    }
-
-    /** Same as {@link #convertToBytes} but writes straight to {@code outputTtf}. */
-    public static void convert(AssetSource assets, String fontName, String familyName, FontStyle style, Path outputTtf)
-            throws IOException {
-        Files.createDirectories(outputTtf.toAbsolutePath().getParent());
-        Files.write(outputTtf, convertToBytes(assets, fontName, familyName, style));
-    }
-
-    /** Same as {@link #convert} but for {@link FontStyle#REGULAR}. */
-    public static void convert(AssetSource assets, String fontName, String familyName, Path outputTtf)
-            throws IOException {
-        convert(assets, fontName, familyName, FontStyle.REGULAR, outputTtf);
-    }
-
-    /**
-     * Converts one font into all four styles ({@link #ALL_STYLES}), writing
-     * {@code <outputDir>/<fileBaseName><style-suffix>.ttf} for each (e.g.
-     * {@code MinecraftDefault.ttf}, {@code MinecraftDefault-Bold.ttf}, ...).
-     */
-    public static void convertAllStyles(AssetSource assets, String fontName, String familyName, String fileBaseName,
-            Path outputDir) throws IOException {
-        Files.createDirectories(outputDir);
-        for (FontStyle style : ALL_STYLES) {
-            convert(assets, fontName, familyName, style, outputDir.resolve(fileBaseName + style.fileSuffix() + ".ttf"));
-        }
-    }
-
-    /**
-     * Converts all of {@link #STANDARD_FONTS} that this asset tree actually contains
-     * (default/alt/illageralt), each in all four styles, into
-     * {@code <outputDir>/<FontId><style-suffix>.ttf}.
-     * Fonts with neither a JSON descriptor nor a pre-1.13 texture (e.g. {@code illageralt}
-     * on 1.12.2) are skipped. Throws if none can be converted.
-     */
-    public static void convertStandardFonts(AssetSource assets, Path outputDir) throws IOException {
-        Files.createDirectories(outputDir);
-        boolean any = false;
-        for (Map.Entry<String, String> e : STANDARD_FONTS.entrySet()) {
-            if (!FontDescriptor.available(assets, e.getKey())) {
-                continue;
-            }
-            any = true;
-            String familyName = e.getValue();
-            String fileBaseName = familyName.replace(" ", "");
-            convertAllStyles(assets, e.getKey(), familyName, fileBaseName, outputDir);
-        }
-        if (!any) {
-            throw new IOException("No convertible fonts in this asset tree "
-                            + "(need font/*.json, or pre-1.13 ascii.png / ascii_sga.png)");
-        }
-    }
-
-    /** Convenience overload that opens and closes the asset source for you. */
-    public static void convertStandardFonts(Path clientJarOrAssetsDir, Path outputDir) throws IOException {
-        try (AssetSource assets = openAssetSource(clientJarOrAssetsDir)) {
-            convertStandardFonts(assets, outputDir);
-        }
     }
 
 }

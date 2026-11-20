@@ -311,6 +311,12 @@ public final class TtfWriter {
             segs.add(new int[] { 0xFFFF, 0xFFFF, 1 });
         }
         int segCount = segs.size();
+
+        // The u16 length caps format 4 at 8,189 segments, and dropping some would hide BMP glyphs from its readers
+        if (16 + segCount * 8 > 0xFFFF) {
+            throw new IllegalStateException("The font maps BMP codepoints in " + segCount
+                            + " separate runs, more than the 8,189 a format 4 cmap can hold");
+        }
         int segCountX2 = segCount * 2;
         int searchRange = 2 * highestPowerOf2LE(segCount);
         int entrySelector = log2(highestPowerOf2LE(segCount));
@@ -496,10 +502,23 @@ public final class TtfWriter {
 
     private byte[] buildName() {
         String subfamilyName = style.subfamilyName();
+
+        // PostScript names allow printable ASCII minus []{}()<>/% and at most 63 characters.
+        // Other characters become their code point in hex, so Unicode families stay distinct.
+        StringBuilder postScriptName = new StringBuilder();
+        (familyName + "-" + subfamilyName).codePoints().forEach(cp -> {
+            if (cp > ' ' && cp < 127 && "[](){}<>/%".indexOf(cp) < 0) {
+                postScriptName.appendCodePoint(cp);
+            } else if (cp != ' ') {
+                postScriptName.append(String.format("U%04X", cp));
+            }
+        });
+        postScriptName.setLength(Math.min(postScriptName.length(), 63));
+
         record Rec(int id, String value) { }
         List<Rec> recs = List.of(new Rec(1, familyName), new Rec(2, subfamilyName),
                 new Rec(3, familyName + " " + subfamilyName + " (McTTF)"), new Rec(4, familyName + " " + subfamilyName),
-                new Rec(5, "Version 1.0"), new Rec(6, (familyName + "-" + subfamilyName).replace(" ", "")));
+                new Rec(5, "Version 1.0"), new Rec(6, postScriptName.toString()));
 
         ByteWriter strings = new ByteWriter();
         List<int[]> offsetsLengths = new ArrayList<>();

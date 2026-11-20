@@ -136,9 +136,14 @@ public final class GlyphLoader {
             int startCol = (b >> 4) & 0xF;
             int endCol = b & 0xF;
 
-            boolean[][] pixels = readPixels(image, cellCol * cellW, cellRow * cellH, cellW, cellH);
+            // 1.12.2 FontRenderer.renderUnicodeChar draws only columns [start, end] with start at the pen,
+            // then advances by the drawn width plus one design pixel.
+            int width = endCol - startCol + 1;
+            boolean[][] pixels = readPixels(image, cellCol * cellW + startCol, cellRow * cellH, width, cellH);
+            double advance = (double) width * provider.height() / cellH + 1;
             out.put(codepoint,
-                    new Glyph(codepoint, pixels, cellW, cellH, provider.height(), provider.ascent(), startCol, endCol));
+                    new Glyph(codepoint, pixels, width, cellH, provider.height(), provider.ascent(), 0, width - 1,
+                            advance));
         }
     }
 

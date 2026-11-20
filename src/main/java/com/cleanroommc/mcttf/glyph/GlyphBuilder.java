@@ -128,8 +128,9 @@ public final class GlyphBuilder {
                 right = x;
             }
         }
+        double advance = glyph.explicitAdvance() < 0 ? -1 : glyph.explicitAdvance() + 1;
         return new Glyph(glyph.codepoint(), out, newW, h, glyph.providerHeight(), glyph.providerAscent(), left, right,
-                glyph.explicitAdvance());
+                advance);
     }
 
 }

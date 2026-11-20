@@ -9,26 +9,31 @@ import com.cleanroommc.mcttf.api.McTTF;
 import com.cleanroommc.mcttf.download.MinecraftClientDownloader;
 import com.cleanroommc.mcttf.extract.AssetSource;
 import com.cleanroommc.mcttf.font.FontStyle;
+import com.cleanroommc.mcttf.glyph.Glyph;
+import com.cleanroommc.mcttf.glyph.TtfGlyphLoader;
 import com.cleanroommc.mcttf.profile.FontDescriptor;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
 /**
  * Converts vanilla Minecraft's bitmap fonts into pixel-perfect TTFs.
  * <p>
- * With no {@code --input}, this downloads the client jar for the requested (or latest
- * release) Minecraft version straight from Mojang and caches it under
- * {@code ~/.mcttf/versions/<id>/client.jar} — no manual jar path needed.
+ * With no {@code --input}, this range-downloads the font files of the client jar for the requested
+ * (or latest release) Minecraft version straight from Mojang and caches them under
+ * {@code .mcttf/versions/<id>/fonts}, falling back to the whole jar if ranges are refused.
  * <p>
  * Usage:
- * {@code mcttf [--input <jar-or-assets-dir>] [--version <id>] [--output <dir>] [--fonts a,b,c] [--styles a,b,c]}
+ * {@code mcttf [--input <jar-or-assets-dir>] [--version <id>] [--output <dir>] [--fonts a,b,c] [--styles a,b,c] [--fallback <ttf>]... [--name <family>]}
  */
 public final class Main {
 
@@ -39,14 +44,29 @@ public final class Main {
 
         Path assetLocation = options.input;
         if (assetLocation == null) {
-            String version = options.version == null ? "latest release" : options.version;
-            System.out.println("No --input given, downloading Minecraft client jar (" + version + ")...");
+            System.out.println("No --input given, downloading font assets of the Minecraft client jar ("
+                            + options.version + ")...");
             MinecraftClientDownloader downloader = new MinecraftClientDownloader();
-            assetLocation = downloader.downloadClientJar(options.version, MinecraftClientDownloader.defaultCacheRoot());
+            try {
+                assetLocation = downloader.downloadFontAssets(options.version,
+                        MinecraftClientDownloader.defaultCacheRoot());
+            } catch (IOException e) {
+                System.out.println("Ranged download failed (" + e.getMessage()
+                                + "), downloading the whole client jar instead...");
+                assetLocation = downloader.downloadClientJar(options.version,
+                        MinecraftClientDownloader.defaultCacheRoot());
+            }
             System.out.println("Using " + assetLocation);
         }
 
         Files.createDirectories(options.output);
+
+        Map<Integer, Glyph> fallback = new LinkedHashMap<>();
+        for (Path ttf : options.fallbacks) {
+            int before = fallback.size();
+            TtfGlyphLoader.load(ttf).forEach(fallback::putIfAbsent);
+            System.out.println("Loaded " + (fallback.size() - before) + " new fallback glyphs from " + ttf);
+        }
 
         try (AssetSource assets = McTTF.openAssetSource(assetLocation)) {
             int converted = 0;
@@ -59,11 +79,15 @@ public final class Main {
                     System.out.println("Skipping font '" + font.getKey() + "' (not in this asset tree)");
                     continue;
                 }
-                String fileBaseName = font.getValue().replace(" ", "");
+                boolean isDefault = font.getKey().equals("default");
+                String family = isDefault && options.name != null ? options.name : font.getValue();
+                String fileBaseName = family.replace(" ", "");
                 for (FontStyle style : options.styles) {
                     System.out.println("Converting font '" + font.getKey() + "' (" + style.subfamilyName() + ")...");
                     Path outFile = options.output.resolve(fileBaseName + style.fileSuffix() + ".ttf");
-                    McTTF.convert(assets, font.getKey(), font.getValue(), style, outFile);
+                    Files.write(outFile,
+                            McTTF.convertToBytes(assets, font.getKey(), family, style,
+                                    isDefault ? fallback : Map.of()));
                     System.out.println("  -> " + outFile);
                     converted++;
                 }
@@ -77,11 +101,13 @@ public final class Main {
     private static final class Options {
 
         Path input;
-        String version;
-        Path output = MinecraftClientDownloader.defaultCacheRoot().resolve("output");
+        String version = MinecraftClientDownloader.PINNED_VERSION;
+        Path output = MinecraftClientDownloader.defaultCacheRoot().resolveSibling("output");
         Map<String, String> fonts = McTTF.STANDARD_FONTS;
         boolean fontsExplicit = false;
-        FontStyle[] styles = McTTF.ALL_STYLES;
+        FontStyle[] styles = FontStyle.values();
+        List<Path> fallbacks = new ArrayList<>();
+        String name;
 
         static Options parse(String[] args) {
             Options o = new Options();
@@ -95,6 +121,8 @@ public final class Main {
                     case "-o", "--output" -> o.output = Path.of(require(args, ++i, arg));
                     case "-f", "--fonts" -> fontNames = List.of(require(args, ++i, arg).split(","));
                     case "-s", "--styles" -> styleNames = List.of(require(args, ++i, arg).split(","));
+                    case "-b", "--fallback" -> o.fallbacks.add(Path.of(require(args, ++i, arg)));
+                    case "-n", "--name" -> o.name = require(args, ++i, arg);
                     case "-h", "--help" -> {
                         printUsage();
                         System.exit(0);
@@ -122,6 +150,28 @@ public final class Main {
                 }
                 o.styles = selected.toArray(FontStyle[]::new);
             }
+            if (o.name != null) {
+                String fileBaseName = o.name.replace(" ", "");
+                if (fileBaseName.isEmpty()
+                        || fileBaseName.equals(".")
+                        || fileBaseName.equals("..")
+                        || fileBaseName.contains("/")
+                        || fileBaseName.contains("\\")) {
+                    throw new IllegalArgumentException("Invalid --name, it must be usable as a file name: " + o.name);
+                }
+                Set<String> fileNames = new HashSet<>();
+                for (Map.Entry<String, String> font : o.fonts.entrySet()) {
+                    String base = font.getKey().equals("default") ? fileBaseName : font.getValue().replace(" ", "");
+                    for (FontStyle style : o.styles) {
+                        String fileName = base + style.fileSuffix() + ".ttf";
+                        // Windows and macOS file systems ignore case by default
+                        if (!fileNames.add(fileName.toLowerCase(Locale.ROOT))) {
+                            throw new IllegalArgumentException("--name '" + o.name + "' makes two fonts write "
+                                            + fileName);
+                        }
+                    }
+                }
+            }
             return o;
         }
 
@@ -148,10 +198,12 @@ public final class Main {
             System.out.println("""
                                Usage: mcttf [options]
                                  -i, --input <jar-or-assets-dir>   Use this client jar or extracted assets dir instead of downloading
-                                 -v, --version <id>                Minecraft version to download (default: latest release)
-                                 -o, --output <dir>                Output directory (default: mcttf-output)
+                                 -v, --version <id>                Minecraft version to download (default: 26.2)
+                                 -o, --output <dir>                Output directory (default: .mcttf/output)
                                  -f, --fonts <a,b,c>                Comma-separated font ids: default,alt,illageralt (default: all)
                                  -s, --styles <a,b,c>               Comma-separated styles: regular,bold,italic,bolditalic (default: all)
+                                 -b, --fallback <ttf>               Pixel TTF that fills codepoints the default font lacks (repeatable, earlier wins)
+                                 -n, --name <family>                Family name for the default font (default: Minecraft Default)
                                """);
         }
 

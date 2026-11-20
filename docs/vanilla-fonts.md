@@ -159,12 +159,10 @@ eras use that box for 8 px providers.
 at `"size": 12` still lines up; the extra two pixels are the accents that used
 to clip out of the 8 px cell.
 
-Unicode-page glyphs in 1.12.2 are 16 px cells with provider height 8, so they
-land at the same physical size as ascii. Their *advances* follow the bitmap
-rule McTTF uses (`round((right+1)*scale)+1`), which is **not** 1.12.2
-`FontRenderer`'s `(end−start)/2+1`. That only matters if you care about
-matching 1.12.2 unicode spacing (CJK is 9 either way; bopomofo is not — see
-Cleanroom `docs/font-rendering.md`).
+McTTF crops each 1.12.2 Unicode-page glyph to the inclusive column range
+`[start, end]` in `glyph_sizes.bin`. The first cropped column starts at the
+pen. The 16 px cell scales to 8 px tall, and the glyph advances by
+`(end + 1 - start) / 2 + 1` pixels, including half-pixel advances.
 
 ## `alt` — Standard Galactic Alphabet
 

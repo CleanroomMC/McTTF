@@ -10,7 +10,9 @@ import com.cleanroommc.mcttf.extract.AssetSource;
 import com.cleanroommc.mcttf.extract.DirAssetSource;
 import com.cleanroommc.mcttf.font.FontStyle;
 import com.cleanroommc.mcttf.glyph.Glyph;
+import com.cleanroommc.mcttf.glyph.GlyphBuilder;
 import com.cleanroommc.mcttf.glyph.GlyphLoader;
+import com.cleanroommc.mcttf.glyph.SimpleGlyphOutline;
 import com.cleanroommc.mcttf.testsupport.MemoryAssetSource;
 import com.cleanroommc.mcttf.testsupport.TtfTables;
 import com.cleanroommc.mcttf.testsupport.VanillaFixtures;
@@ -134,6 +136,11 @@ class PreJsonFontsTest {
             FontDescriptor d = FontDescriptor.load(assets, "default");
             assertThat(d.providers().stream().map(FontProvider::type).toList()).isEqualTo(List.of("space", "bitmap",
                     "legacy_unicode"));
+
+            // U+05D0 sizes byte 0x16 draws texture columns 1..6 at the pen and advances (7 - 1) / 2 + 1 = 4.
+            SimpleGlyphOutline alef = GlyphBuilder.build(new GlyphLoader(assets).load(d).get(0x05D0));
+            assertThat(alef.advanceWidth()).isEqualTo((int) (4 * GlyphBuilder.UNITS_PER_VISUAL_PIXEL));
+            assertThat(alef.minX()).isEqualTo(0);
 
             byte[] bytes = McTTF.convertToBytes(assets, "alt", "Minecraft Enchantment", FontStyle.REGULAR);
             TtfTables ttf = new TtfTables(bytes);
