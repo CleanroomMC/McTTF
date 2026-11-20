@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 CleanroomMC contributors
+ * SPDX-License-Identifier: MIT
+ */
+
 package com.cleanroommc.mcttf.font;
 
 import com.cleanroommc.mcttf.glyph.Glyph;
@@ -34,7 +39,8 @@ public final class TtfWriter {
 
     /** A visible hollow box, so a missing character shows up obviously instead of rendering blank. */
     private static SimpleGlyphOutline notdefOutline() {
-        int w = 5, h = 8;
+        int w = 5;
+        int h = 8;
         boolean[][] pixels = new boolean[h][w];
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
@@ -43,6 +49,63 @@ public final class TtfWriter {
         }
         Glyph notdef = new Glyph(0, pixels, w, h, 8, 7, 0, w - 1);
         return GlyphBuilder.build(notdef);
+    }
+
+    private static void patchU32(byte[] buf, int offset, long value) {
+        buf[offset] = (byte) ((value >>> 24) & 0xFF);
+        buf[offset + 1] = (byte) ((value >>> 16) & 0xFF);
+        buf[offset + 2] = (byte) ((value >>> 8) & 0xFF);
+        buf[offset + 3] = (byte) (value & 0xFF);
+    }
+
+    private static byte[] concat(byte[]... parts) {
+        int total = 0;
+        for (byte[] p : parts) {
+            total += p.length;
+        }
+        byte[] result = new byte[total];
+        int pos = 0;
+        for (byte[] p : parts) {
+            System.arraycopy(p, 0, result, pos, p.length);
+            pos += p.length;
+        }
+        return result;
+    }
+
+    private static byte[] pad4(byte[] data) {
+        int rem = data.length % 4;
+        if (rem == 0) {
+            return data;
+        }
+        byte[] out = new byte[data.length + (4 - rem)];
+        System.arraycopy(data, 0, out, 0, data.length);
+        return out;
+    }
+
+    private static long checksum(byte[] paddedData) {
+        long sum = 0;
+        for (int i = 0; i < paddedData.length; i += 4) {
+            long word = ((long) (paddedData[i] & 0xFF) << 24) | ((long) (paddedData[i + 1] & 0xFF) << 16)
+                    | ((long) (paddedData[i + 2] & 0xFF) << 8) | (paddedData[i + 3] & 0xFF);
+            sum = (sum + word) & 0xFFFFFFFFL;
+        }
+        return sum;
+    }
+
+    private static int highestPowerOf2LE(int n) {
+        int p = 1;
+        while (p * 2 <= n) {
+            p *= 2;
+        }
+        return p;
+    }
+
+    private static int log2(int powerOf2) {
+        int r = 0;
+        while ((1 << r) < powerOf2) {
+            r++;
+        }
+        return r;
     }
 
     public void addGlyphs(Map<Integer, SimpleGlyphOutline> byCodepoint) {
@@ -146,64 +209,13 @@ public final class TtfWriter {
         return full;
     }
 
-    private record TableEntry(String tag, byte[] data, int offset, long checksum) { }
-
     private int findTableOffset(List<TableEntry> entries, String tag) {
         for (TableEntry e : entries) {
-            if (e.tag().equals(tag)) return e.offset();
+            if (e.tag().equals(tag)) {
+                return e.offset();
+            }
         }
         throw new IllegalStateException("missing table " + tag);
-    }
-
-    private static void patchU32(byte[] buf, int offset, long value) {
-        buf[offset] = (byte) ((value >>> 24) & 0xFF);
-        buf[offset + 1] = (byte) ((value >>> 16) & 0xFF);
-        buf[offset + 2] = (byte) ((value >>> 8) & 0xFF);
-        buf[offset + 3] = (byte) (value & 0xFF);
-    }
-
-    private static byte[] concat(byte[]... parts) {
-        int total = 0;
-        for (byte[] p : parts) total += p.length;
-        byte[] result = new byte[total];
-        int pos = 0;
-        for (byte[] p : parts) {
-            System.arraycopy(p, 0, result, pos, p.length);
-            pos += p.length;
-        }
-        return result;
-    }
-
-    private static byte[] pad4(byte[] data) {
-        int rem = data.length % 4;
-        if (rem == 0) return data;
-        byte[] out = new byte[data.length + (4 - rem)];
-        System.arraycopy(data, 0, out, 0, data.length);
-        return out;
-    }
-
-    private static long checksum(byte[] paddedData) {
-        long sum = 0;
-        for (int i = 0; i < paddedData.length; i += 4) {
-            long word = ((long) (paddedData[i] & 0xFF) << 24)
-                    | ((long) (paddedData[i + 1] & 0xFF) << 16)
-                    | ((long) (paddedData[i + 2] & 0xFF) << 8)
-                    | (paddedData[i + 3] & 0xFF);
-            sum = (sum + word) & 0xFFFFFFFFL;
-        }
-        return sum;
-    }
-
-    private static int highestPowerOf2LE(int n) {
-        int p = 1;
-        while (p * 2 <= n) p *= 2;
-        return p;
-    }
-
-    private static int log2(int powerOf2) {
-        int r = 0;
-        while ((1 << r) < powerOf2) r++;
-        return r;
     }
 
     private byte[] encodeGlyph(SimpleGlyphOutline g) {
@@ -212,10 +224,10 @@ public final class TtfWriter {
         }
         ByteWriter w = new ByteWriter();
         w.i16(g.contours().size());
-        w.i16(g.xMin());
-        w.i16(g.yMin());
-        w.i16(g.xMax());
-        w.i16(g.yMax());
+        w.i16(g.minX());
+        w.i16(g.minY());
+        w.i16(g.maxX());
+        w.i16(g.maxY());
 
         int cumulative = -1;
         for (List<Point> contour : g.contours()) {
@@ -229,7 +241,8 @@ public final class TtfWriter {
                 w.u8(0x01); // ON_CURVE_POINT, full-width deltas for both axes
             }
         }
-        int prevX = 0, prevY = 0;
+        int prevX = 0;
+        int prevY = 0;
         for (List<Point> contour : g.contours()) {
             for (Point p : contour) {
                 w.i16(p.x - prevX);
@@ -244,7 +257,7 @@ public final class TtfWriter {
             }
         }
         byte[] data = w.toByteArray();
-        return data.length % 2 == 0 ? data : concat(data, new byte[]{0});
+        return data.length % 2 == 0 ? data : concat(data, new byte[] { 0 });
     }
 
     private byte[] buildLoca(int[] glyphOffsets, boolean longFormat) {
@@ -264,7 +277,9 @@ public final class TtfWriter {
      */
     private List<int[]> cmapGroups(boolean bmpOnly) {
         List<int[]> groups = new ArrayList<>();
-        int runStart = -1, runEnd = -1, runGid = -1;
+        int runStart = -1;
+        int runEnd = -1;
+        int runGid = -1;
         for (Map.Entry<Integer, Integer> e : new TreeMap<>(codepointToGlyphIndex).entrySet()) {
             int code = e.getKey();
             int gid = e.getValue();
@@ -275,14 +290,14 @@ public final class TtfWriter {
                 runEnd = code;
             } else {
                 if (runStart >= 0) {
-                    groups.add(new int[]{runStart, runEnd, runGid});
+                    groups.add(new int[] { runStart, runEnd, runGid });
                 }
                 runStart = runEnd = code;
                 runGid = gid;
             }
         }
         if (runStart >= 0) {
-            groups.add(new int[]{runStart, runEnd, runGid});
+            groups.add(new int[] { runStart, runEnd, runGid });
         }
         return groups;
     }
@@ -290,10 +305,10 @@ public final class TtfWriter {
     private byte[] buildCmapFormat4(List<int[]> groups) {
         List<int[]> segs = new ArrayList<>(); // {startCode, endCode, idDelta}
         for (int[] g : groups) {
-            segs.add(new int[]{g[0], g[1], (g[2] - g[0]) & 0xFFFF});
+            segs.add(new int[] { g[0], g[1], (g[2] - g[0]) & 0xFFFF });
         }
         if (segs.isEmpty() || segs.get(segs.size() - 1)[1] != 0xFFFF) {
-            segs.add(new int[]{0xFFFF, 0xFFFF, 1});
+            segs.add(new int[] { 0xFFFF, 0xFFFF, 1 });
         }
         int segCount = segs.size();
         int segCountX2 = segCount * 2;
@@ -310,23 +325,31 @@ public final class TtfWriter {
         sub.u16(searchRange);
         sub.u16(entrySelector);
         sub.u16(rangeShift);
-        for (int[] s : segs) sub.u16(s[1]);
+        for (int[] s : segs) {
+            sub.u16(s[1]);
+        }
         sub.u16(0);
-        for (int[] s : segs) sub.u16(s[0]);
-        for (int[] s : segs) sub.i16(s[2]);
-        for (int[] s : segs) sub.u16(0);
+        for (int[] s : segs) {
+            sub.u16(s[0]);
+        }
+        for (int[] s : segs) {
+            sub.i16(s[2]);
+        }
+        for (int[] s : segs) {
+            sub.u16(0);
+        }
         return sub.toByteArray();
     }
 
     private byte[] buildCmapFormat12(List<int[]> groups) {
-        int nGroups = groups.size();
-        int length = 16 + nGroups * 12;
+        int groupCount = groups.size();
+        int length = 16 + groupCount * 12;
         ByteWriter sub = new ByteWriter();
         sub.u16(12);
         sub.u16(0);
         sub.u32(length);
         sub.u32(0);
-        sub.u32(nGroups);
+        sub.u32(groupCount);
         for (int[] g : groups) {
             sub.u32(g[0]);
             sub.u32(g[1]);
@@ -362,12 +385,21 @@ public final class TtfWriter {
 
     private byte[] buildHhea() {
         int advanceWidthMax = glyphs.stream().mapToInt(SimpleGlyphOutline::advanceWidth).max().orElse(0);
-        int minLsb = glyphs.stream().filter(g -> !g.contours().isEmpty())
-                .mapToInt(SimpleGlyphOutline::leftSideBearing).min().orElse(0);
-        int minRsb = glyphs.stream().filter(g -> !g.contours().isEmpty())
-                .mapToInt(g -> g.advanceWidth() - (g.xMax() - g.xMin()) - g.leftSideBearing()).min().orElse(0);
-        int xMaxExtent = glyphs.stream().filter(g -> !g.contours().isEmpty())
-                .mapToInt(g -> g.leftSideBearing() + (g.xMax() - g.xMin())).max().orElse(0);
+        int minLsb = glyphs.stream()
+                .filter(g -> !g.contours().isEmpty())
+                .mapToInt(SimpleGlyphOutline::leftSideBearing)
+                .min()
+                .orElse(0);
+        int minRsb = glyphs.stream()
+                .filter(g -> !g.contours().isEmpty())
+                .mapToInt(g -> g.advanceWidth() - (g.maxX() - g.minX()) - g.leftSideBearing())
+                .min()
+                .orElse(0);
+        int maxExtentX = glyphs.stream()
+                .filter(g -> !g.contours().isEmpty())
+                .mapToInt(g -> g.leftSideBearing() + (g.maxX() - g.minX()))
+                .max()
+                .orElse(0);
 
         int[] win = winMetrics(fontBoundingBox());
         ByteWriter w = new ByteWriter();
@@ -378,7 +410,7 @@ public final class TtfWriter {
         w.u16(advanceWidthMax);
         w.i16(minLsb);
         w.i16(minRsb);
-        w.i16(xMaxExtent);
+        w.i16(maxExtentX);
         w.i16(1); // caretSlopeRise
         w.i16(0); // caretSlopeRun
         w.i16(0); // caretOffset
@@ -414,24 +446,29 @@ public final class TtfWriter {
     }
 
     private int[] fontBoundingBox() {
-        int xMin = 0, yMin = 0, xMax = 0, yMax = 0;
+        int minX = 0;
+        int minY = 0;
+        int maxX = 0;
+        int maxY = 0;
         boolean any = false;
         for (SimpleGlyphOutline g : glyphs) {
-            if (g.contours().isEmpty()) continue;
+            if (g.contours().isEmpty()) {
+                continue;
+            }
             if (!any) {
-                xMin = g.xMin();
-                yMin = g.yMin();
-                xMax = g.xMax();
-                yMax = g.yMax();
+                minX = g.minX();
+                minY = g.minY();
+                maxX = g.maxX();
+                maxY = g.maxY();
                 any = true;
             } else {
-                xMin = Math.min(xMin, g.xMin());
-                yMin = Math.min(yMin, g.yMin());
-                xMax = Math.max(xMax, g.xMax());
-                yMax = Math.max(yMax, g.yMax());
+                minX = Math.min(minX, g.minX());
+                minY = Math.min(minY, g.minY());
+                maxX = Math.max(maxX, g.maxX());
+                maxY = Math.max(maxY, g.maxY());
             }
         }
-        return new int[]{xMin, yMin, xMax, yMax};
+        return new int[] { minX, minY, maxX, maxY };
     }
 
     private byte[] buildHead(boolean longLoca, int[] bbox) {
@@ -459,22 +496,17 @@ public final class TtfWriter {
 
     private byte[] buildName() {
         String subfamilyName = style.subfamilyName();
-        record Rec(int id, String value) {}
-        List<Rec> recs = List.of(
-                new Rec(1, familyName),
-                new Rec(2, subfamilyName),
-                new Rec(3, familyName + " " + subfamilyName + " (McTTF)"),
-                new Rec(4, familyName + " " + subfamilyName),
-                new Rec(5, "Version 1.0"),
-                new Rec(6, (familyName + "-" + subfamilyName).replace(" ", ""))
-        );
+        record Rec(int id, String value) { }
+        List<Rec> recs = List.of(new Rec(1, familyName), new Rec(2, subfamilyName),
+                new Rec(3, familyName + " " + subfamilyName + " (McTTF)"), new Rec(4, familyName + " " + subfamilyName),
+                new Rec(5, "Version 1.0"), new Rec(6, (familyName + "-" + subfamilyName).replace(" ", "")));
 
         ByteWriter strings = new ByteWriter();
         List<int[]> offsetsLengths = new ArrayList<>();
         for (Rec r : recs) {
             int start = strings.size();
             strings.utf16be(r.value());
-            offsetsLengths.add(new int[]{start, strings.size() - start});
+            offsetsLengths.add(new int[] { start, strings.size() - start });
         }
 
         ByteWriter w = new ByteWriter();
@@ -515,7 +547,7 @@ public final class TtfWriter {
         int designDescent = (int) Math.round(GlyphBuilder.UNITS_PER_VISUAL_PIXEL * GlyphBuilder.DESCENT_PIXELS);
         int winAscent = Math.max(designAscent, bbox[3]);
         int winDescent = Math.max(designDescent, Math.max(0, -bbox[1]));
-        return new int[]{winAscent, winDescent};
+        return new int[] { winAscent, winDescent };
     }
 
     private byte[] buildOs2(int[] bbox) {
@@ -556,7 +588,9 @@ public final class TtfWriter {
         w.i16((int) Math.round(GlyphBuilder.UNITS_PER_VISUAL_PIXEL * GlyphBuilder.STRIKEOUT_SIZE_PIXELS)); // yStrikeoutSize
         w.i16((int) Math.round(GlyphBuilder.UNITS_PER_VISUAL_PIXEL * GlyphBuilder.STRIKEOUT_POSITION_PIXELS)); // yStrikeoutPosition
         w.i16(0); // sFamilyClass
-        for (int i = 0; i < 10; i++) w.u8(0); // panose
+        for (int i = 0; i < 10; i++) {
+            w.u8(0); // panose
+        }
         w.u32(1); // ulUnicodeRange1 (basic latin)
         w.u32(0);
         w.u32(0);
@@ -574,4 +608,7 @@ public final class TtfWriter {
         w.u32(0);
         return w.toByteArray();
     }
+
+    private record TableEntry(String tag, byte[] data, int offset, long checksum) { }
+
 }

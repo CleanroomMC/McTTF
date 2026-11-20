@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 CleanroomMC contributors
+ * SPDX-License-Identifier: MIT
+ */
+
 package com.cleanroommc.mcttf.font;
 
 import java.io.ByteArrayOutputStream;
@@ -40,7 +45,9 @@ final class ByteWriter {
 
     ByteWriter tag(String fourCc) {
         byte[] b = fourCc.getBytes(StandardCharsets.US_ASCII);
-        if (b.length != 4) throw new IllegalArgumentException("tag must be 4 chars: " + fourCc);
+        if (b.length != 4) {
+            throw new IllegalArgumentException("tag must be 4 chars: " + fourCc);
+        }
         out.writeBytes(b);
         return this;
     }

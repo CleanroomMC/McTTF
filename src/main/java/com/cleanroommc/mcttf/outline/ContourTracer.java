@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 CleanroomMC contributors
+ * SPDX-License-Identifier: MIT
+ */
+
 package com.cleanroommc.mcttf.outline;
 
 import com.cleanroommc.mcttf.glyph.GlyphBuilder;
@@ -23,6 +28,8 @@ import java.util.List;
  */
 public final class ContourTracer {
 
+    private ContourTracer() { }
+
     public static List<List<Point>> trace(boolean[][] pixels) {
         int h = pixels.length;
         int w = h == 0 ? 0 : pixels[0].length;
@@ -45,7 +52,8 @@ public final class ContourTracer {
      * component reachable from the corner - everything else 4-connected-background is a real hole.
      */
     private static List<boolean[][]> findHoles(boolean[][] pixels, int w, int h) {
-        int pw = w + 2, ph = h + 2;
+        int pw = w + 2;
+        int ph = h + 2;
         boolean[][] inverted = new boolean[ph][pw];
         for (int y = 0; y < ph; y++) {
             for (int x = 0; x < pw; x++) {
@@ -76,19 +84,22 @@ public final class ContourTracer {
         List<boolean[][]> components = new ArrayList<>();
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
-                if (!grid[y][x] || visited[y][x]) continue;
+                if (!grid[y][x] || visited[y][x]) {
+                    continue;
+                }
                 boolean[][] component = new boolean[h][w];
                 Deque<int[]> stack = new ArrayDeque<>();
-                stack.push(new int[]{x, y});
+                stack.push(new int[] { x, y });
                 visited[y][x] = true;
                 while (!stack.isEmpty()) {
                     int[] p = stack.pop();
                     component[p[1]][p[0]] = true;
                     for (int d = 0; d < dx.length; d++) {
-                        int nx = p[0] + dx[d], ny = p[1] + dy[d];
+                        int nx = p[0] + dx[d];
+                        int ny = p[1] + dy[d];
                         if (nx >= 0 && ny >= 0 && nx < w && ny < h && grid[ny][nx] && !visited[ny][nx]) {
                             visited[ny][nx] = true;
-                            stack.push(new int[]{nx, ny});
+                            stack.push(new int[] { nx, ny });
                         }
                     }
                 }
@@ -111,7 +122,8 @@ public final class ContourTracer {
         List<Point> result = new ArrayList<>();
         result.add(pos);
         do {
-            int x = pos.x, y = pos.y;
+            int x = pos.x;
+            int y = pos.y;
             boolean topLeft = isSet(region, x - 1, y - 1, w, h);
             boolean topRight = isSet(region, x, y - 1, w, h);
             boolean bottomLeft = isSet(region, x - 1, y, w, h);
@@ -155,7 +167,9 @@ public final class ContourTracer {
     private static Point findFirstOpaque(boolean[][] region, int w, int h) {
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
-                if (region[y][x]) return new Point(x, y);
+                if (region[y][x]) {
+                    return new Point(x, y);
+                }
             }
         }
         throw new IllegalArgumentException("region has no opaque pixels");
@@ -181,8 +195,10 @@ public final class ContourTracer {
             Point prev = open.get((i - 1 + n) % n);
             Point cur = open.get(i);
             Point next = open.get((i + 1) % n);
-            long dx1 = cur.x - prev.x, dy1 = cur.y - prev.y;
-            long dx2 = next.x - cur.x, dy2 = next.y - cur.y;
+            long dx1 = cur.x - prev.x;
+            long dy1 = cur.y - prev.y;
+            long dx2 = next.x - cur.x;
+            long dy2 = next.y - cur.y;
             boolean collinear = dx1 * dy2 - dy1 * dx2 == 0;
             if (!collinear) {
                 result.add(cur);
@@ -190,7 +206,5 @@ public final class ContourTracer {
         }
         return result.isEmpty() ? open : result;
     }
-
-    private ContourTracer() { }
 
 }

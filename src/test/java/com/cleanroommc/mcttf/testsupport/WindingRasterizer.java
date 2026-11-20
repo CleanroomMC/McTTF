@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 CleanroomMC contributors
+ * SPDX-License-Identifier: MIT
+ */
+
 package com.cleanroommc.mcttf.testsupport;
 
 import java.awt.Point;
@@ -10,8 +15,7 @@ import java.util.List;
  */
 public final class WindingRasterizer {
 
-    private WindingRasterizer() {
-    }
+    private WindingRasterizer() { }
 
     public static boolean filled(List<List<Point>> contours, double px, double py) {
         int winding = 0;
@@ -21,9 +25,13 @@ public final class WindingRasterizer {
                 Point a = contour.get(i);
                 Point b = contour.get((i + 1) % n);
                 if (a.y <= py) {
-                    if (b.y > py && cross(a, b, px, py) > 0) winding++;
+                    if (b.y > py && cross(a, b, px, py) > 0) {
+                        winding++;
+                    }
                 } else {
-                    if (b.y <= py && cross(a, b, px, py) < 0) winding--;
+                    if (b.y <= py && cross(a, b, px, py) < 0) {
+                        winding--;
+                    }
                 }
             }
         }
@@ -33,4 +41,5 @@ public final class WindingRasterizer {
     private static double cross(Point a, Point b, double px, double py) {
         return (double) (b.x - a.x) * (py - a.y) - (px - a.x) * (b.y - a.y);
     }
+
 }

@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 CleanroomMC contributors
+ * SPDX-License-Identifier: MIT
+ */
+
 package com.cleanroommc.mcttf.glyph;
 
 /**
@@ -13,11 +18,18 @@ package com.cleanroommc.mcttf.glyph;
  * @param rightCol        last opaque column, inclusive (-1 if glyph is blank)
  * @param explicitAdvance design-pixel advance width from a {@code space} provider, or -1 if unset
  */
-public record Glyph(int codepoint, boolean[][] pixels, int cellW, int cellH, int providerHeight, int providerAscent,
-                    int leftCol, int rightCol, double explicitAdvance) {
+public record Glyph(int codepoint,
+        boolean[][] pixels,
+        int cellW,
+        int cellH,
+        int providerHeight,
+        int providerAscent,
+        int leftCol,
+        int rightCol,
+        double explicitAdvance) {
 
     public Glyph(int codepoint, boolean[][] pixels, int cellW, int cellH, int providerHeight, int providerAscent,
-                 int leftCol, int rightCol) {
+            int leftCol, int rightCol) {
         this(codepoint, pixels, cellW, cellH, providerHeight, providerAscent, leftCol, rightCol, -1);
     }
 
@@ -47,4 +59,5 @@ public record Glyph(int codepoint, boolean[][] pixels, int cellW, int cellH, int
         double scale = (double) providerHeight / cellH;
         return (int) (0.5 + (rightCol + 1) * scale) + 1;
     }
+
 }

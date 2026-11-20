@@ -1,15 +1,20 @@
+/*
+ * Copyright (c) 2026 CleanroomMC contributors
+ * SPDX-License-Identifier: MIT
+ */
+
 package com.cleanroommc.mcttf.api;
 
 import com.cleanroommc.mcttf.extract.AssetSource;
 import com.cleanroommc.mcttf.extract.DirAssetSource;
 import com.cleanroommc.mcttf.extract.JarAssetSource;
-import com.cleanroommc.mcttf.glyph.Glyph;
-import com.cleanroommc.mcttf.glyph.GlyphLoader;
-import com.cleanroommc.mcttf.profile.FontDescriptor;
 import com.cleanroommc.mcttf.font.FontStyle;
-import com.cleanroommc.mcttf.glyph.GlyphBuilder;
-import com.cleanroommc.mcttf.glyph.SimpleGlyphOutline;
 import com.cleanroommc.mcttf.font.TtfWriter;
+import com.cleanroommc.mcttf.glyph.Glyph;
+import com.cleanroommc.mcttf.glyph.GlyphBuilder;
+import com.cleanroommc.mcttf.glyph.GlyphLoader;
+import com.cleanroommc.mcttf.glyph.SimpleGlyphOutline;
+import com.cleanroommc.mcttf.profile.FontDescriptor;
 
 import java.io.File;
 import java.io.IOException;
@@ -24,14 +29,13 @@ import java.util.Map;
 public final class McTTF {
 
     /** The three fonts this tool targets: id -> display family name. */
-    public static final Map<String, String> STANDARD_FONTS = Map.of(
-            "default", "Minecraft Default",
-            "alt", "Minecraft Enchantment",
-            "illageralt", "Minecraft Illager"
-    );
+    public static final Map<String, String> STANDARD_FONTS = Map.of("default", "Minecraft Default", "alt",
+            "Minecraft Enchantment", "illageralt", "Minecraft Illager");
 
     /** Regular, Bold, Italic, Bold Italic - generated for every font by default. */
     public static final FontStyle[] ALL_STYLES = FontStyle.values();
+
+    private McTTF() { }
 
     /** Opens a client jar or an already-extracted assets directory as an {@link AssetSource}. */
     public static AssetSource openAssetSource(Path jarOrDir) throws IOException {
@@ -53,7 +57,8 @@ public final class McTTF {
      * @param familyName the TTF family name to embed
      * @param style      which of Regular/Bold/Italic/Bold Italic to synthesize
      */
-    public static byte[] convertToBytes(AssetSource assets, String fontName, String familyName, FontStyle style) throws IOException {
+    public static byte[] convertToBytes(AssetSource assets, String fontName, String familyName, FontStyle style)
+            throws IOException {
         FontDescriptor descriptor = FontDescriptor.load(assets, fontName);
         GlyphLoader loader = new GlyphLoader(assets);
         Map<Integer, Glyph> glyphs = loader.load(descriptor);
@@ -74,13 +79,15 @@ public final class McTTF {
     }
 
     /** Same as {@link #convertToBytes} but writes straight to {@code outputTtf}. */
-    public static void convert(AssetSource assets, String fontName, String familyName, FontStyle style, Path outputTtf) throws IOException {
+    public static void convert(AssetSource assets, String fontName, String familyName, FontStyle style, Path outputTtf)
+            throws IOException {
         Files.createDirectories(outputTtf.toAbsolutePath().getParent());
         Files.write(outputTtf, convertToBytes(assets, fontName, familyName, style));
     }
 
     /** Same as {@link #convert} but for {@link FontStyle#REGULAR}. */
-    public static void convert(AssetSource assets, String fontName, String familyName, Path outputTtf) throws IOException {
+    public static void convert(AssetSource assets, String fontName, String familyName, Path outputTtf)
+            throws IOException {
         convert(assets, fontName, familyName, FontStyle.REGULAR, outputTtf);
     }
 
@@ -89,8 +96,8 @@ public final class McTTF {
      * {@code <outputDir>/<fileBaseName><style-suffix>.ttf} for each (e.g.
      * {@code MinecraftDefault.ttf}, {@code MinecraftDefault-Bold.ttf}, ...).
      */
-    public static void convertAllStyles(AssetSource assets, String fontName, String familyName,
-                                         String fileBaseName, Path outputDir) throws IOException {
+    public static void convertAllStyles(AssetSource assets, String fontName, String familyName, String fileBaseName,
+            Path outputDir) throws IOException {
         Files.createDirectories(outputDir);
         for (FontStyle style : ALL_STYLES) {
             convert(assets, fontName, familyName, style, outputDir.resolve(fileBaseName + style.fileSuffix() + ".ttf"));
@@ -118,7 +125,7 @@ public final class McTTF {
         }
         if (!any) {
             throw new IOException("No convertible fonts in this asset tree "
-                    + "(need font/*.json, or pre-1.13 ascii.png / ascii_sga.png)");
+                            + "(need font/*.json, or pre-1.13 ascii.png / ascii_sga.png)");
         }
     }
 
@@ -128,7 +135,5 @@ public final class McTTF {
             convertStandardFonts(assets, outputDir);
         }
     }
-
-    private McTTF() { }
 
 }

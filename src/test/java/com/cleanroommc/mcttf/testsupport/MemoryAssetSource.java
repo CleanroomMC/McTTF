@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 CleanroomMC contributors
+ * SPDX-License-Identifier: MIT
+ */
+
 package com.cleanroommc.mcttf.testsupport;
 
 import com.cleanroommc.mcttf.extract.AssetSource;
@@ -34,6 +39,6 @@ public final class MemoryAssetSource implements AssetSource {
     }
 
     @Override
-    public void close() {
-    }
+    public void close() { }
+
 }

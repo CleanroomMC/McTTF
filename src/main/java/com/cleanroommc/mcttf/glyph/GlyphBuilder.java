@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 CleanroomMC contributors
+ * SPDX-License-Identifier: MIT
+ */
+
 package com.cleanroommc.mcttf.glyph;
 
 import com.cleanroommc.mcttf.font.FontStyle;
@@ -40,6 +45,8 @@ public final class GlyphBuilder {
     public static final double UNDERLINE_POSITION_PIXELS = -1;
     public static final double UNDERLINE_THICKNESS_PIXELS = 1;
 
+    private GlyphBuilder() { }
+
     public static SimpleGlyphOutline build(Glyph glyph) {
         return build(glyph, FontStyle.REGULAR);
     }
@@ -62,29 +69,31 @@ public final class GlyphBuilder {
         List<List<Point>> pixelContours = ContourTracer.trace(source.pixels());
 
         List<List<Point>> fontContours = new ArrayList<>();
-        int xMin = Integer.MAX_VALUE, yMin = Integer.MAX_VALUE;
-        int xMax = Integer.MIN_VALUE, yMax = Integer.MIN_VALUE;
+        int minX = Integer.MAX_VALUE;
+        int minY = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int maxY = Integer.MIN_VALUE;
         for (List<Point> pixelContour : pixelContours) {
             List<Point> fontContour = new ArrayList<>(pixelContour.size());
             for (Point p : pixelContour) {
                 int fy = (int) Math.round((ascentInTexturePx - p.y) * unitsPerTexturePx);
                 double fxVisual = p.x * visualPxPerTexturePx;
                 if (style.italic()) {
-                    double yMc = (MC_LINE_TOP_PIXELS - source.providerAscent()) + p.y * visualPxPerTexturePx;
-                    fxVisual += 1.0 - ITALIC_SHEAR * yMc;
+                    double mcY = (MC_LINE_TOP_PIXELS - source.providerAscent()) + p.y * visualPxPerTexturePx;
+                    fxVisual += 1.0 - ITALIC_SHEAR * mcY;
                 }
                 int fx = (int) Math.round(fxVisual * UNITS_PER_VISUAL_PIXEL);
                 fontContour.add(new Point(fx, fy));
-                xMin = Math.min(xMin, fx);
-                xMax = Math.max(xMax, fx);
-                yMin = Math.min(yMin, fy);
-                yMax = Math.max(yMax, fy);
+                minX = Math.min(minX, fx);
+                maxX = Math.max(maxX, fx);
+                minY = Math.min(minY, fy);
+                maxY = Math.max(maxY, fy);
             }
             fontContours.add(fontContour);
         }
 
-        int lsb = xMin;
-        return new SimpleGlyphOutline(fontContours, xMin, yMin, xMax, yMax, advanceWidth, lsb);
+        int lsb = minX;
+        return new SimpleGlyphOutline(fontContours, minX, minY, maxX, maxY, advanceWidth, lsb);
     }
 
     /**
@@ -101,7 +110,8 @@ public final class GlyphBuilder {
         int newW = w + 1;
         boolean[][] src = glyph.pixels();
         boolean[][] out = new boolean[h][newW];
-        int left = -1, right = -1;
+        int left = -1;
+        int right = -1;
         for (int x = 0; x < newW; x++) {
             boolean columnOpaque = false;
             for (int y = 0; y < h; y++) {
@@ -121,7 +131,5 @@ public final class GlyphBuilder {
         return new Glyph(glyph.codepoint(), out, newW, h, glyph.providerHeight(), glyph.providerAscent(), left, right,
                 glyph.explicitAdvance());
     }
-
-    private GlyphBuilder() { }
 
 }

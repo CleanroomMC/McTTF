@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 CleanroomMC contributors
+ * SPDX-License-Identifier: MIT
+ */
+
 package com.cleanroommc.mcttf.json;
 
 import java.util.ArrayList;
@@ -9,6 +14,7 @@ import java.util.Map;
 public final class Json {
 
     private final String src;
+
     private int pos;
 
     private Json(String src) {
@@ -96,7 +102,9 @@ public final class Json {
         StringBuilder sb = new StringBuilder();
         while (true) {
             char c = src.charAt(pos++);
-            if (c == '"') break;
+            if (c == '"') {
+                break;
+            }
             if (c == '\\') {
                 char esc = src.charAt(pos++);
                 switch (esc) {
@@ -127,7 +135,13 @@ public final class Json {
         if (peek() == '-') {
             pos++;
         }
-        while (pos < src.length() && (Character.isDigit(peek()) || peek() == '.' || peek() == 'e' || peek() == 'E' || peek() == '+' || peek() == '-')) {
+        while (pos < src.length()
+                && (Character.isDigit(peek())
+                        || peek() == '.'
+                        || peek() == 'e'
+                        || peek() == 'E'
+                        || peek() == '+'
+                        || peek() == '-')) {
             pos++;
         }
         String num = src.substring(start, pos);
@@ -173,4 +187,5 @@ public final class Json {
             pos++;
         }
     }
+
 }

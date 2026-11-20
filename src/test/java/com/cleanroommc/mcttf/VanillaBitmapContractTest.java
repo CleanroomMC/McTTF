@@ -1,23 +1,27 @@
+/*
+ * Copyright (c) 2026 CleanroomMC contributors
+ * SPDX-License-Identifier: MIT
+ */
+
 package com.cleanroommc.mcttf;
 
 import com.cleanroommc.mcttf.api.McTTF;
 import com.cleanroommc.mcttf.extract.AssetSource;
+import com.cleanroommc.mcttf.font.FontStyle;
 import com.cleanroommc.mcttf.glyph.Glyph;
+import com.cleanroommc.mcttf.glyph.GlyphBuilder;
 import com.cleanroommc.mcttf.glyph.GlyphLoader;
+import com.cleanroommc.mcttf.glyph.SimpleGlyphOutline;
 import com.cleanroommc.mcttf.profile.FontDescriptor;
 import com.cleanroommc.mcttf.testsupport.TtfTables;
 import com.cleanroommc.mcttf.testsupport.VanillaFixtures;
 import com.cleanroommc.mcttf.testsupport.WindingRasterizer;
-import com.cleanroommc.mcttf.font.FontStyle;
-import com.cleanroommc.mcttf.glyph.GlyphBuilder;
-import com.cleanroommc.mcttf.glyph.SimpleGlyphOutline;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Drives the shipped load → metrics → outline → write path against real vanilla 26.2
@@ -29,79 +33,6 @@ class VanillaBitmapContractTest {
     static final int BOX_DRAWING_LIGHT_VERTICAL = 0x2502;
     static final int GOTHIC_LETTER_AHSA = 0x10330;
     static final int BUCKET_EMOJI = 0x1FAA3;
-
-    @Test
-    void nonlatinEuropeanCellsAreEightByEightAndKeepSupplementaryScalars() throws Exception {
-        Map<Integer, Glyph> glyphs = loadDefault();
-        Glyph gothic = glyphs.get(GOTHIC_LETTER_AHSA);
-        Glyph bucket = glyphs.get(BUCKET_EMOJI);
-        assertTrue(gothic != null, "U+10330 must be loaded as its own scalar");
-        assertTrue(bucket != null, "U+1FAA3 must be loaded as its own scalar");
-        assertEquals(8, gothic.cellW());
-        assertEquals(8, gothic.cellH());
-        assertEquals(8, bucket.cellW());
-        assertEquals(8, bucket.cellH());
-        assertTrue(!glyphs.containsKey(GOTHIC_LETTER_AHSA & 0xFFFF)
-                || glyphs.get(GOTHIC_LETTER_AHSA & 0xFFFF) != gothic);
-    }
-
-    @Test
-    void advanceMatchesMinecraftRightEdgeRuleOnAscii() throws Exception {
-        Map<Integer, Glyph> glyphs = loadDefault();
-
-        Glyph box = glyphs.get(BOX_DRAWING_LIGHT_VERTICAL);
-        int derivedBox = minecraftBitmapAdvance(box);
-        assertEquals(derivedBox, (int) box.advanceDesignPixels());
-        assertEquals(4, lastOpaqueColumn(box.pixels()), "U+2502 last opaque col in 8px cell");
-        assertEquals(6, derivedBox);
-
-        Glyph a = glyphs.get((int) 'A');
-        int derivedA = minecraftBitmapAdvance(a);
-        assertEquals(derivedA, (int) a.advanceDesignPixels());
-        assertEquals(0, firstOpaqueColumn(a.pixels()), "A has no left padding");
-        assertTrue(derivedA > 1);
-
-        Glyph space = glyphs.get((int) ' ');
-        assertEquals(4, space.advanceDesignPixels());
-    }
-
-    @Test
-    void regularOutlinesRoundTripVanillaCells() throws Exception {
-        Map<Integer, Glyph> glyphs = loadDefault();
-        assertPixelsMatch(glyphs.get((int) 'A'));
-        assertPixelsMatch(glyphs.get((int) 'O'));
-        assertPixelsMatch(glyphs.get(BOX_DRAWING_LIGHT_VERTICAL));
-        assertPixelsMatch(glyphs.get(GOTHIC_LETTER_AHSA));
-    }
-
-    @Test
-    void writtenDefaultTtfMapsBmpAndSupplementaryCodepoints() throws Exception {
-        byte[] bytes;
-        try (AssetSource assets = VanillaFixtures.open()) {
-            bytes = McTTF.convertToBytes(assets, "default", "Minecraft Default", FontStyle.REGULAR);
-        }
-        TtfTables ttf = new TtfTables(bytes);
-        int gidA = ttf.glyphId('A');
-        int gidGothic = ttf.glyphId(GOTHIC_LETTER_AHSA);
-        int gidBucket = ttf.glyphId(BUCKET_EMOJI);
-        assertTrue(gidA > 0, "A must map");
-        assertTrue(gidGothic > 0, "U+10330 must map via format 12");
-        assertTrue(gidBucket > 0, "U+1FAA3 must map via format 12");
-        assertNotEquals(gidA, gidGothic);
-        assertNotEquals(gidGothic, gidBucket);
-        assertNotEquals(gidA, ttf.glyphId(GOTHIC_LETTER_AHSA & 0xFFFF));
-        assertTrue(ttf.format4Length() > 0 && ttf.format4Length() < 65535);
-        assertEquals(0xFFFF, ttf.usLastCharIndex());
-        assertEquals(GlyphBuilder.UNITS_PER_EM, ttf.unitsPerEm());
-        assertTrue(ttf.usWinAscent() >= 1000, "win ascent must cover accented 12px (ascent 10) yMax");
-        assertEquals(0xB1B0AFBAL, TtfTables.fileChecksum(bytes));
-    }
-
-    private static Map<Integer, Glyph> loadDefault() throws Exception {
-        try (AssetSource assets = VanillaFixtures.open()) {
-            return new GlyphLoader(assets).load(FontDescriptor.load(assets, "default"));
-        }
-    }
 
     /** Minecraft BitmapProvider advance: (int)(0.5 + (right+1)*scale) + 1, empty → 1. */
     static int minecraftBitmapAdvance(Glyph glyph) {
@@ -157,9 +88,84 @@ class VanillaBitmapContractTest {
                 double fy = (ascentInTexturePx - (y + 0.5)) * unitsPerTexturePx;
                 boolean expected = glyph.pixels()[y][x];
                 boolean actual = WindingRasterizer.filled(outline.contours(), fx, fy);
-                assertEquals(expected, actual, "pixel (" + x + "," + y + ") U+"
-                        + Integer.toHexString(glyph.codepoint()));
+                assertThat(actual)
+                        .as("pixel (" + x + "," + y + ") U+" + Integer.toHexString(glyph.codepoint()))
+                        .isEqualTo(expected);
             }
         }
     }
+
+    private static Map<Integer, Glyph> loadDefault() throws Exception {
+        try (AssetSource assets = VanillaFixtures.open()) {
+            return new GlyphLoader(assets).load(FontDescriptor.load(assets, "default"));
+        }
+    }
+
+    @Test
+    void nonlatinEuropeanCellsAreEightByEightAndKeepSupplementaryScalars() throws Exception {
+        Map<Integer, Glyph> glyphs = loadDefault();
+        Glyph gothic = glyphs.get(GOTHIC_LETTER_AHSA);
+        Glyph bucket = glyphs.get(BUCKET_EMOJI);
+        assertThat(gothic != null).as("U+10330 must be loaded as its own scalar").isTrue();
+        assertThat(bucket != null).as("U+1FAA3 must be loaded as its own scalar").isTrue();
+        assertThat(gothic.cellW()).isEqualTo(8);
+        assertThat(gothic.cellH()).isEqualTo(8);
+        assertThat(bucket.cellW()).isEqualTo(8);
+        assertThat(bucket.cellH()).isEqualTo(8);
+        assertThat(!glyphs.containsKey(GOTHIC_LETTER_AHSA & 0xFFFF)
+                        || glyphs.get(GOTHIC_LETTER_AHSA & 0xFFFF) != gothic).isTrue();
+    }
+
+    @Test
+    void advanceMatchesMinecraftRightEdgeRuleOnAscii() throws Exception {
+        Map<Integer, Glyph> glyphs = loadDefault();
+
+        Glyph box = glyphs.get(BOX_DRAWING_LIGHT_VERTICAL);
+        int derivedBox = minecraftBitmapAdvance(box);
+        assertThat((int) box.advanceDesignPixels()).isEqualTo(derivedBox);
+        assertThat(lastOpaqueColumn(box.pixels())).as("U+2502 last opaque col in 8px cell").isEqualTo(4);
+        assertThat(derivedBox).isEqualTo(6);
+
+        Glyph a = glyphs.get((int) 'A');
+        int derivedA = minecraftBitmapAdvance(a);
+        assertThat((int) a.advanceDesignPixels()).isEqualTo(derivedA);
+        assertThat(firstOpaqueColumn(a.pixels())).as("A has no left padding").isEqualTo(0);
+        assertThat(derivedA > 1).isTrue();
+
+        Glyph space = glyphs.get((int) ' ');
+        assertThat(space.advanceDesignPixels()).isEqualTo(4);
+    }
+
+    @Test
+    void regularOutlinesRoundTripVanillaCells() throws Exception {
+        Map<Integer, Glyph> glyphs = loadDefault();
+        assertPixelsMatch(glyphs.get((int) 'A'));
+        assertPixelsMatch(glyphs.get((int) 'O'));
+        assertPixelsMatch(glyphs.get(BOX_DRAWING_LIGHT_VERTICAL));
+        assertPixelsMatch(glyphs.get(GOTHIC_LETTER_AHSA));
+    }
+
+    @Test
+    void writtenDefaultTtfMapsBmpAndSupplementaryCodepoints() throws Exception {
+        byte[] bytes;
+        try (AssetSource assets = VanillaFixtures.open()) {
+            bytes = McTTF.convertToBytes(assets, "default", "Minecraft Default", FontStyle.REGULAR);
+        }
+        TtfTables ttf = new TtfTables(bytes);
+        int gidA = ttf.glyphId('A');
+        int gidGothic = ttf.glyphId(GOTHIC_LETTER_AHSA);
+        int gidBucket = ttf.glyphId(BUCKET_EMOJI);
+        assertThat(gidA > 0).as("A must map").isTrue();
+        assertThat(gidGothic > 0).as("U+10330 must map via format 12").isTrue();
+        assertThat(gidBucket > 0).as("U+1FAA3 must map via format 12").isTrue();
+        assertThat(gidGothic).isNotEqualTo(gidA);
+        assertThat(gidBucket).isNotEqualTo(gidGothic);
+        assertThat(ttf.glyphId(GOTHIC_LETTER_AHSA & 0xFFFF)).isNotEqualTo(gidA);
+        assertThat(ttf.format4Length() > 0 && ttf.format4Length() < 65535).isTrue();
+        assertThat(ttf.usLastCharIndex()).isEqualTo(0xFFFF);
+        assertThat(ttf.unitsPerEm()).isEqualTo(GlyphBuilder.UNITS_PER_EM);
+        assertThat(ttf.usWinAscent() >= 1000).as("win ascent must cover accented 12px (ascent 10) yMax").isTrue();
+        assertThat(TtfTables.fileChecksum(bytes)).isEqualTo(0xB1B0AFBAL);
+    }
+
 }

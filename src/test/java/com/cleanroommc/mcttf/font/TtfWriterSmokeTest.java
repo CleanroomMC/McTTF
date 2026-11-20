@@ -1,8 +1,14 @@
+/*
+ * Copyright (c) 2026 CleanroomMC contributors
+ * SPDX-License-Identifier: MIT
+ */
+
 package com.cleanroommc.mcttf.font;
 
 import com.cleanroommc.mcttf.glyph.Glyph;
 import com.cleanroommc.mcttf.glyph.GlyphBuilder;
 import com.cleanroommc.mcttf.glyph.SimpleGlyphOutline;
+
 import org.junit.jupiter.api.Test;
 
 import java.awt.Font;
@@ -10,7 +16,7 @@ import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class TtfWriterSmokeTest {
 
@@ -24,7 +30,7 @@ class TtfWriterSmokeTest {
                 ring[y][x] = border;
             }
         }
-        Glyph oGlyph = new Glyph('O', ring, 8, 8, 8, 7, 1, 6);
+        Glyph letterO = new Glyph('O', ring, 8, 8, 8, 7, 1, 6);
 
         boolean[][] solid = new boolean[8][8];
         for (int y = 2; y < 6; y++) {
@@ -35,7 +41,7 @@ class TtfWriterSmokeTest {
         Glyph blockGlyph = new Glyph('I', solid, 8, 8, 8, 7, 2, 5);
 
         Map<Integer, SimpleGlyphOutline> outlines = new LinkedHashMap<>();
-        outlines.put((int) 'O', GlyphBuilder.build(oGlyph));
+        outlines.put((int) 'O', GlyphBuilder.build(letterO));
         outlines.put((int) 'I', GlyphBuilder.build(blockGlyph));
 
         TtfWriter writer = new TtfWriter("McTTF Smoke", FontStyle.REGULAR);
@@ -45,10 +51,11 @@ class TtfWriterSmokeTest {
         tmp.deleteOnExit();
         writer.write(tmp);
 
-        assertTrue(tmp.length() > 0);
+        assertThat(tmp.length() > 0).isTrue();
 
         Font font = Font.createFont(Font.TRUETYPE_FONT, tmp);
-        assertTrue(font.canDisplay('O'));
-        assertTrue(font.canDisplay('I'));
+        assertThat(font.canDisplay('O')).isTrue();
+        assertThat(font.canDisplay('I')).isTrue();
     }
+
 }

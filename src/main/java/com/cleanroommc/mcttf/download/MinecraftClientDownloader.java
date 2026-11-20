@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 CleanroomMC contributors
+ * SPDX-License-Identifier: MIT
+ */
+
 package com.cleanroommc.mcttf.download;
 
 import com.cleanroommc.mcttf.json.Json;
@@ -27,6 +32,26 @@ public final class MinecraftClientDownloader {
         return Path.of(".mcttf", "versions");
     }
 
+    private static String sha1Hex(Path file) throws IOException {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-1");
+            try (var in = Files.newInputStream(file)) {
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) != -1) {
+                    digest.update(buf, 0, n);
+                }
+            }
+            StringBuilder sb = new StringBuilder();
+            for (byte b : digest.digest()) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IOException(e);
+        }
+    }
+
     /**
      * Downloads the client jar for {@code versionId} (or the latest release if null),
      * reusing a previously cached copy when its checksum still matches.
@@ -39,8 +64,7 @@ public final class MinecraftClientDownloader {
         Map<String, Object> versionMeta = fetchJson(versionUrl);
         @SuppressWarnings("unchecked")
         Map<String, Object> downloads = (Map<String, Object>) versionMeta.get("downloads");
-        @SuppressWarnings("unchecked")
-        Map<String, Object> client = (Map<String, Object>) downloads.get("client");
+        @SuppressWarnings("unchecked") Map<String, Object> client = (Map<String, Object>) downloads.get("client");
         String jarUrl = (String) client.get("url");
         String sha1 = (String) client.get("sha1");
 
@@ -72,17 +96,14 @@ public final class MinecraftClientDownloader {
     }
 
     private String latestRelease(Map<String, Object> manifest) {
-        @SuppressWarnings("unchecked")
-        Map<String, Object> latest = (Map<String, Object>) manifest.get("latest");
+        @SuppressWarnings("unchecked") Map<String, Object> latest = (Map<String, Object>) manifest.get("latest");
         return (String) latest.get("release");
     }
 
     private String findVersionUrl(Map<String, Object> manifest, String versionId) throws IOException {
-        @SuppressWarnings("unchecked")
-        List<Object> versions = (List<Object>) manifest.get("versions");
+        @SuppressWarnings("unchecked") List<Object> versions = (List<Object>) manifest.get("versions");
         for (Object o : versions) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> v = (Map<String, Object>) o;
+            @SuppressWarnings("unchecked") Map<String, Object> v = (Map<String, Object>) o;
             if (versionId.equals(v.get("id"))) {
                 return (String) v.get("url");
             }
@@ -103,26 +124,6 @@ public final class MinecraftClientDownloader {
             throw new IOException("Failed to fetch " + url + ": HTTP " + response.statusCode());
         }
         return Json.parseObject(response.body());
-    }
-
-    private static String sha1Hex(Path file) throws IOException {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-1");
-            try (var in = Files.newInputStream(file)) {
-                byte[] buf = new byte[8192];
-                int n;
-                while ((n = in.read(buf)) != -1) {
-                    digest.update(buf, 0, n);
-                }
-            }
-            StringBuilder sb = new StringBuilder();
-            for (byte b : digest.digest()) {
-                sb.append(String.format("%02x", b));
-            }
-            return sb.toString();
-        } catch (NoSuchAlgorithmException e) {
-            throw new IOException(e);
-        }
     }
 
 }

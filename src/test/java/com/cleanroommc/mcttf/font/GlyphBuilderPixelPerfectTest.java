@@ -1,16 +1,22 @@
+/*
+ * Copyright (c) 2026 CleanroomMC contributors
+ * SPDX-License-Identifier: MIT
+ */
+
 package com.cleanroommc.mcttf.font;
 
 import com.cleanroommc.mcttf.glyph.Glyph;
 import com.cleanroommc.mcttf.glyph.GlyphBuilder;
 import com.cleanroommc.mcttf.glyph.SimpleGlyphOutline;
 import com.cleanroommc.mcttf.testsupport.WindingRasterizer;
+
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Proves {@link GlyphBuilder#build(Glyph)} - the actual production path, tracer plus the
@@ -23,8 +29,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class GlyphBuilderPixelPerfectTest {
 
     static Stream<Arguments> patterns() {
-        return Stream.of(
-                Arguments.of("letter A, 8px cell", """
+        return Stream.of(Arguments.of("letter A, 8px cell",
+                        """
                         .###....
                         #...#...
                         #####...
@@ -34,7 +40,8 @@ class GlyphBuilderPixelPerfectTest {
                         #...#...
                         ........
                         """),
-                Arguments.of("ring, 16px supersampled cell", """
+                Arguments.of("ring, 16px supersampled cell",
+                        """
                         ................
                         .##############.
                         .#............#.
@@ -52,14 +59,27 @@ class GlyphBuilderPixelPerfectTest {
                         .##############.
                         ................
                         """),
-                Arguments.of("figure-8 double pinch", """
+                Arguments.of("figure-8 double pinch",
+                        """
                         .###.
                         #...#
                         .#.#.
                         #...#
                         .###.
-                        """)
-        );
+                        """));
+    }
+
+    private static boolean[][] parse(String art) {
+        String[] lines = art.strip().lines().toArray(String[]::new);
+        int h = lines.length;
+        int w = lines[0].length();
+        boolean[][] pixels = new boolean[h][w];
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                pixels[y][x] = lines[y].charAt(x) == '#';
+            }
+        }
+        return pixels;
     }
 
     @ParameterizedTest(name = "{0}")
@@ -71,11 +91,14 @@ class GlyphBuilderPixelPerfectTest {
         int providerHeight = 8;
         int providerAscent = 7;
 
-        int left = -1, right = -1;
+        int left = -1;
+        int right = -1;
         for (int x = 0; x < cellW; x++) {
             for (int y = 0; y < cellH; y++) {
                 if (pixels[y][x]) {
-                    if (left < 0) left = x;
+                    if (left < 0) {
+                        left = x;
+                    }
                     right = x;
                 }
             }
@@ -93,21 +116,9 @@ class GlyphBuilderPixelPerfectTest {
                 double fy = (ascentInTexturePx - (y + 0.5)) * unitsPerTexturePx;
                 boolean expected = pixels[y][x];
                 boolean actual = WindingRasterizer.filled(outline.contours(), fx, fy);
-                assertEquals(expected, actual, "pixel (" + x + "," + y + ") in: " + name);
+                assertThat(actual).as("pixel (" + x + "," + y + ") in: " + name).isEqualTo(expected);
             }
         }
     }
 
-    private static boolean[][] parse(String art) {
-        String[] lines = art.strip().lines().toArray(String[]::new);
-        int h = lines.length;
-        int w = lines[0].length();
-        boolean[][] pixels = new boolean[h][w];
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                pixels[y][x] = lines[y].charAt(x) == '#';
-            }
-        }
-        return pixels;
-    }
 }

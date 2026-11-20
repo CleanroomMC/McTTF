@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 CleanroomMC contributors
+ * SPDX-License-Identifier: MIT
+ */
+
 package com.cleanroommc.mcttf.cli;
 
 import com.cleanroommc.mcttf.api.McTTF;
@@ -27,6 +32,8 @@ import java.util.Set;
  */
 public final class Main {
 
+    private Main() { }
+
     public static void main(String[] args) throws Exception {
         Options options = Options.parse(args);
 
@@ -46,9 +53,8 @@ public final class Main {
             for (Map.Entry<String, String> font : options.fonts.entrySet()) {
                 if (!FontDescriptor.available(assets, font.getKey())) {
                     if (options.fontsExplicit) {
-                        throw new IOException("Font '" + font.getKey()
-                                + "' is not in this asset tree (no font/" + font.getKey()
-                                + ".json and no pre-1.13 texture to synthesize from)");
+                        throw new IOException("Font '" + font.getKey() + "' is not in this asset tree (no font/"
+                                        + font.getKey() + ".json and no pre-1.13 texture to synthesize from)");
                     }
                     System.out.println("Skipping font '" + font.getKey() + "' (not in this asset tree)");
                     continue;
@@ -69,6 +75,7 @@ public final class Main {
     }
 
     private static final class Options {
+
         Path input;
         String version;
         Path output = MinecraftClientDownloader.defaultCacheRoot().resolve("output");
@@ -100,8 +107,8 @@ public final class Main {
                 for (String name : fontNames) {
                     String family = McTTF.STANDARD_FONTS.get(name);
                     if (family == null) {
-                        throw new IllegalArgumentException("Unknown font: " + name
-                                + " (known: " + String.join(", ", McTTF.STANDARD_FONTS.keySet()) + ")");
+                        throw new IllegalArgumentException("Unknown font: " + name + " (known: "
+                                        + String.join(", ", McTTF.STANDARD_FONTS.keySet()) + ")");
                     }
                     selected.put(name, family);
                 }
@@ -124,8 +131,9 @@ public final class Main {
                 case "bold" -> FontStyle.BOLD;
                 case "italic" -> FontStyle.ITALIC;
                 case "bolditalic", "bold-italic", "bold_italic" -> FontStyle.BOLD_ITALIC;
-                default -> throw new IllegalArgumentException("Unknown style: " + name
-                        + " (known: regular, bold, italic, bolditalic)");
+                default ->
+                        throw new IllegalArgumentException("Unknown style: " + name
+                                        + " (known: regular, bold, italic, bolditalic)");
             };
         }
 
@@ -138,13 +146,15 @@ public final class Main {
 
         private static void printUsage() {
             System.out.println("""
-                    Usage: mcttf [options]
-                      -i, --input <jar-or-assets-dir>   Use this client jar or extracted assets dir instead of downloading
-                      -v, --version <id>                Minecraft version to download (default: latest release)
-                      -o, --output <dir>                Output directory (default: mcttf-output)
-                      -f, --fonts <a,b,c>                Comma-separated font ids: default,alt,illageralt (default: all)
-                      -s, --styles <a,b,c>               Comma-separated styles: regular,bold,italic,bolditalic (default: all)
-                    """);
+                               Usage: mcttf [options]
+                                 -i, --input <jar-or-assets-dir>   Use this client jar or extracted assets dir instead of downloading
+                                 -v, --version <id>                Minecraft version to download (default: latest release)
+                                 -o, --output <dir>                Output directory (default: mcttf-output)
+                                 -f, --fonts <a,b,c>                Comma-separated font ids: default,alt,illageralt (default: all)
+                                 -s, --styles <a,b,c>               Comma-separated styles: regular,bold,italic,bolditalic (default: all)
+                               """);
         }
+
     }
+
 }

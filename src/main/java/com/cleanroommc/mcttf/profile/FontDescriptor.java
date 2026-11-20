@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 CleanroomMC contributors
+ * SPDX-License-Identifier: MIT
+ */
+
 package com.cleanroommc.mcttf.profile;
 
 import com.cleanroommc.mcttf.extract.AssetSource;
@@ -38,7 +43,7 @@ public record FontDescriptor(String name, List<FontProvider> providers) {
             return PreJsonFonts.synthesize(assets, local);
         }
         throw new IOException("Font '" + fontName + "' not found: missing " + assetPath
-                + PreJsonFonts.missingHint(local));
+                        + PreJsonFonts.missingHint(local));
     }
 
     static String qualify(String fontName) {
@@ -60,25 +65,26 @@ public record FontDescriptor(String name, List<FontProvider> providers) {
         return "assets/" + namespace + "/font/" + path + ".json";
     }
 
-    private static void collect(AssetSource assets, String fontId, List<FontProvider> out, Set<String> visited) throws IOException {
+    private static void collect(AssetSource assets, String fontId, List<FontProvider> out, Set<String> visited)
+            throws IOException {
         if (!visited.add(fontId)) {
             return; // Guard against reference cycles
         }
         String assetPath = descriptorPath(fontId);
 
         Map<String, Object> root = Json.parseObject(assets.readString(assetPath));
-        @SuppressWarnings("unchecked")
-        List<Object> rawProviders = (List<Object>) root.get("providers");
+        @SuppressWarnings("unchecked") List<Object> rawProviders = (List<Object>) root.get("providers");
         for (Object o : rawProviders) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> p = (Map<String, Object>) o;
+            @SuppressWarnings("unchecked") Map<String, Object> p = (Map<String, Object>) o;
             String type = (String) p.get("type");
             switch (type) {
                 case "bitmap" -> out.add(FontProvider.bitmap(p));
                 case "legacy_unicode" -> out.add(FontProvider.legacyUnicode(p));
                 case "space" -> out.add(FontProvider.space(p));
                 case "reference" -> collect(assets, (String) p.get("id"), out, visited);
-                default -> { /* ttf, unihex, options, etc. not needed for these fonts */ }
+                default ->
+                { /* ttf, unihex, options, etc. not needed for these fonts */
+                }
             }
         }
     }

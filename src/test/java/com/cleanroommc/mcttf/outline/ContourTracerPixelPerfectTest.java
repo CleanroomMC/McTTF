@@ -1,6 +1,12 @@
+/*
+ * Copyright (c) 2026 CleanroomMC contributors
+ * SPDX-License-Identifier: MIT
+ */
+
 package com.cleanroommc.mcttf.outline;
 
 import com.cleanroommc.mcttf.testsupport.WindingRasterizer;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -12,7 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Proves {@link ContourTracer}'s output is pixel-perfect: rasterizing the traced contours
@@ -26,13 +32,15 @@ class ContourTracerPixelPerfectTest {
     private static final Map<String, String> PATTERNS = new LinkedHashMap<>();
 
     static {
-        PATTERNS.put("solid block", """
+        PATTERNS.put("solid block",
+                """
                 ....
                 .##.
                 .##.
                 ....
                 """);
-        PATTERNS.put("ring with a hole", """
+        PATTERNS.put("ring with a hole",
+                """
                 ........
                 .######.
                 .#....#.
@@ -42,7 +50,8 @@ class ContourTracerPixelPerfectTest {
                 .######.
                 ........
                 """);
-        PATTERNS.put("letter A (diagonal pinch counter)", """
+        PATTERNS.put("letter A (diagonal pinch counter)",
+                """
                 .###....
                 #...#...
                 #####...
@@ -52,14 +61,16 @@ class ContourTracerPixelPerfectTest {
                 #...#...
                 ........
                 """);
-        PATTERNS.put("figure-8 double pinch", """
+        PATTERNS.put("figure-8 double pinch",
+                """
                 .###.
                 #...#
                 .#.#.
                 #...#
                 .###.
                 """);
-        PATTERNS.put("two separate holes (letter B-ish)", """
+        PATTERNS.put("two separate holes (letter B-ish)",
+                """
                 ####..
                 #..#..
                 #..#..
@@ -68,7 +79,8 @@ class ContourTracerPixelPerfectTest {
                 #..#..
                 ####..
                 """);
-        PATTERNS.put("nested island inside a hole", """
+        PATTERNS.put("nested island inside a hole",
+                """
                 .......
                 .#####.
                 .#...#.
@@ -77,24 +89,28 @@ class ContourTracerPixelPerfectTest {
                 .#####.
                 .......
                 """);
-        PATTERNS.put("checkerboard (many diagonal-only touches)", """
+        PATTERNS.put("checkerboard (many diagonal-only touches)",
+                """
                 #.#.#.
                 .#.#.#
                 #.#.#.
                 .#.#.#
                 """);
-        PATTERNS.put("single pixel", """
+        PATTERNS.put("single pixel",
+                """
                 ...
                 .#.
                 ...
                 """);
-        PATTERNS.put("L-tromino touching itself diagonally", """
+        PATTERNS.put("L-tromino touching itself diagonally",
+                """
                 #.....
                 ##....
                 .##...
                 ..##..
                 """);
-        PATTERNS.put("empty", """
+        PATTERNS.put("empty",
+                """
                 ....
                 ....
                 """);
@@ -102,38 +118,6 @@ class ContourTracerPixelPerfectTest {
 
     static Stream<Arguments> patterns() {
         return PATTERNS.entrySet().stream().map(e -> Arguments.of(e.getKey(), e.getValue()));
-    }
-
-    @ParameterizedTest(name = "{0}")
-    @MethodSource("patterns")
-    void tracedContoursRasterizeBackToTheExactSourceBitmap(String name, String art) {
-        boolean[][] pixels = parse(art);
-        List<List<Point>> contours = ContourTracer.trace(pixels);
-
-        int h = pixels.length;
-        int w = h == 0 ? 0 : pixels[0].length;
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                boolean expected = pixels[y][x];
-                boolean actual = WindingRasterizer.filled(contours, x + 0.5, y + 0.5);
-                assertEquals(expected, actual, "pixel (" + x + "," + y + ") in: " + name);
-            }
-        }
-    }
-
-    @Test
-    void everyContourIsClosedAndRectilinear() {
-        for (Map.Entry<String, String> e : PATTERNS.entrySet()) {
-            boolean[][] pixels = parse(e.getValue());
-            for (List<Point> contour : ContourTracer.trace(pixels)) {
-                for (int i = 0; i < contour.size(); i++) {
-                    Point a = contour.get(i);
-                    Point b = contour.get((i + 1) % contour.size());
-                    boolean axisAligned = a.x == b.x || a.y == b.y;
-                    assertEquals(true, axisAligned, "non-axis-aligned edge in: " + e.getKey());
-                }
-            }
-        }
     }
 
     private static boolean[][] parse(String art) {
@@ -148,4 +132,37 @@ class ContourTracerPixelPerfectTest {
         }
         return pixels;
     }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("patterns")
+    void tracedContoursRasterizeBackToTheExactSourceBitmap(String name, String art) {
+        boolean[][] pixels = parse(art);
+        List<List<Point>> contours = ContourTracer.trace(pixels);
+
+        int h = pixels.length;
+        int w = h == 0 ? 0 : pixels[0].length;
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                boolean expected = pixels[y][x];
+                boolean actual = WindingRasterizer.filled(contours, x + 0.5, y + 0.5);
+                assertThat(actual).as("pixel (" + x + "," + y + ") in: " + name).isEqualTo(expected);
+            }
+        }
+    }
+
+    @Test
+    void everyContourIsClosedAndRectilinear() {
+        for (Map.Entry<String, String> e : PATTERNS.entrySet()) {
+            boolean[][] pixels = parse(e.getValue());
+            for (List<Point> contour : ContourTracer.trace(pixels)) {
+                for (int i = 0; i < contour.size(); i++) {
+                    Point a = contour.get(i);
+                    Point b = contour.get((i + 1) % contour.size());
+                    boolean axisAligned = a.x == b.x || a.y == b.y;
+                    assertThat(axisAligned).as("non-axis-aligned edge in: " + e.getKey()).isEqualTo(true);
+                }
+            }
+        }
+    }
+
 }

@@ -1,41 +1,21 @@
 name: Publish
 
 on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+      - '[0-9]+.[0-9]+.[0-9]+-*'
   workflow_dispatch:
 
-concurrency:
-  group: maven-publish
-  cancel-in-progress: false
-
 permissions:
-  contents: read
+  contents: write
+  issues: read
+  pull-requests: read
 
 jobs:
-  publish:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          fetch-tags: true
-
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: 25
-
-      - uses: gradle/actions/setup-gradle@v6
-        with:
-          cache-read-only: true
-
-      - name: Test
-        run: ./gradlew test -Pversioning.publish
-
-      - name: Print version
-        run: ./gradlew -q printVersion -Pversioning.publish
-
-      - name: Publish to Cleanroom Maven
-        env:
-          ORG_GRADLE_PROJECT_CleanroomMavenUsername: ${{ secrets.MAVEN_NAME }}
-          ORG_GRADLE_PROJECT_CleanroomMavenPassword: ${{ secrets.MAVEN_PASSWORD }}
-        run: ./gradlew publish --no-configuration-cache -Pversioning.publish
+  release:
+    uses: CleanroomMC/Conventions/.github/workflows/release.yml@1.7.0
+    with:
+      java-version: 25
+      publish-maven: true
+    secrets: inherit

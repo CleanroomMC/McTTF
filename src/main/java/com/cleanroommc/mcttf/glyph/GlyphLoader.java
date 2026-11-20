@@ -1,15 +1,20 @@
+/*
+ * Copyright (c) 2026 CleanroomMC contributors
+ * SPDX-License-Identifier: MIT
+ */
+
 package com.cleanroommc.mcttf.glyph;
 
 import com.cleanroommc.mcttf.extract.AssetSource;
 import com.cleanroommc.mcttf.profile.FontDescriptor;
 import com.cleanroommc.mcttf.profile.FontProvider;
 
-import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import javax.imageio.ImageIO;
 
 /**
  * Turns a {@link FontDescriptor} plus its backing textures into per-codepoint {@link Glyph}s.
@@ -24,6 +29,24 @@ public final class GlyphLoader {
 
     public GlyphLoader(AssetSource assets) {
         this.assets = assets;
+    }
+
+    private static String namespace(String mcId) {
+        int colon = mcId.indexOf(':');
+        return colon < 0 ? "minecraft" : mcId.substring(0, colon);
+    }
+
+    private static String idPath(String mcId) {
+        int colon = mcId.indexOf(':');
+        return colon < 0 ? mcId : mcId.substring(colon + 1);
+    }
+
+    private static String toTexturePath(String mcId) {
+        return "assets/" + namespace(mcId) + "/textures/" + idPath(mcId);
+    }
+
+    private static String toFontPath(String mcId) {
+        return "assets/" + namespace(mcId) + "/font/" + idPath(mcId).replaceFirst("^font/", "");
     }
 
     public Map<Integer, Glyph> load(FontDescriptor descriptor) throws IOException {
@@ -55,24 +78,6 @@ public final class GlyphLoader {
         return image;
     }
 
-    private static String namespace(String mcId) {
-        int colon = mcId.indexOf(':');
-        return colon < 0 ? "minecraft" : mcId.substring(0, colon);
-    }
-
-    private static String idPath(String mcId) {
-        int colon = mcId.indexOf(':');
-        return colon < 0 ? mcId : mcId.substring(colon + 1);
-    }
-
-    private static String toTexturePath(String mcId) {
-        return "assets/" + namespace(mcId) + "/textures/" + idPath(mcId);
-    }
-
-    private static String toFontPath(String mcId) {
-        return "assets/" + namespace(mcId) + "/font/" + idPath(mcId).replaceFirst("^font/", "");
-    }
-
     private void loadSpace(FontProvider provider, Map<Integer, Glyph> out) {
         for (Map.Entry<Integer, Integer> e : provider.advances().entrySet()) {
             out.putIfAbsent(e.getKey(), Glyph.space(e.getKey(), e.getValue()));
@@ -100,8 +105,8 @@ public final class GlyphLoader {
                 int codepoint = line.codePointAt(i);
                 i += Character.charCount(codepoint);
                 if (codepoint != 0 && !out.containsKey(codepoint)) {
-                    Glyph glyph = sliceCell(image, col * cellW, row * cellH, cellW, cellH,
-                            codepoint, provider.height(), provider.ascent());
+                    Glyph glyph = sliceCell(image, col * cellW, row * cellH, cellW, cellH, codepoint, provider.height(),
+                            provider.ascent());
                     out.put(codepoint, glyph);
                 }
                 col++;
@@ -132,13 +137,13 @@ public final class GlyphLoader {
             int endCol = b & 0xF;
 
             boolean[][] pixels = readPixels(image, cellCol * cellW, cellRow * cellH, cellW, cellH);
-            out.put(codepoint, new Glyph(codepoint, pixels, cellW, cellH,
-                    provider.height(), provider.ascent(), startCol, endCol));
+            out.put(codepoint,
+                    new Glyph(codepoint, pixels, cellW, cellH, provider.height(), provider.ascent(), startCol, endCol));
         }
     }
 
-    private Glyph sliceCell(BufferedImage image, int x, int y, int w, int h,
-                             int codepoint, int providerHeight, int providerAscent) {
+    private Glyph sliceCell(BufferedImage image, int x, int y, int w, int h, int codepoint, int providerHeight,
+            int providerAscent) {
         boolean[][] pixels = readPixels(image, x, y, w, h);
         int left = -1;
         int right = -1;
@@ -151,7 +156,9 @@ public final class GlyphLoader {
                 }
             }
             if (opaque) {
-                if (left < 0) left = col;
+                if (left < 0) {
+                    left = col;
+                }
                 right = col;
             }
         }
@@ -170,4 +177,5 @@ public final class GlyphLoader {
         }
         return pixels;
     }
+
 }
